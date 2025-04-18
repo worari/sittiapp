@@ -58,15 +58,15 @@ export default function Home() {
           <option value="ในกห">ใน กห.</option>
           <option value="นอกกห">นอก กห.</option>
         </select>
-        <button type="submit" className="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded">ส่งข้อมูล</button>
+        <button type="submit" className="bg-[#1d3557] hover:bg-[#16324f] text-white px-4 py-2 rounded">ส่งข้อมูล</button>
       </form>
 
       <h3 className="text-xl font-semibold mb-4 text-gray-700">Timeline การส่งข้อมูล</h3>
-      <div className="relative border-l-4 border-blue-800 pl-6 space-y-4">
+      <div className="relative border-l-4 border-[#1d3557] pl-6 space-y-4">
         {timeline.map((item: any, idx: number) => (
           <div key={idx} className="relative">
-            <span className="absolute -left-3 top-1.5 w-6 h-6 bg-white border-2 border-blue-800 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4 text-blue-800" />
+            <span className="absolute -left-3 top-1.5 w-6 h-6 bg-white border-2 border-[#1d3557] rounded-full flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4 text-[#1d3557]" />
             </span>
             <Card className="p-4 shadow border border-gray-200 bg-white">
               <p className="font-semibold text-gray-800">{item.firstName} {item.lastName} ({item.govType})</p>
