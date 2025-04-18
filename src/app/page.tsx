@@ -3,8 +3,6 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { CheckCircle2, Clock } from 'lucide-react';
 
-
-
 export default function Home() {
   const [formData, setFormData] = useState({
     citizenId: '',
