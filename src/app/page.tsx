@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
+
 
 export default function MilitaryForm() {
   const [govType, setGovType] = useState('');
