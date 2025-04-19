@@ -1,9 +1,7 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { PrismaClient } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '@/lib/supabase';
 import formidable from 'formidable';
-import fs from 'fs';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export const config = {
   api: {
@@ -11,61 +9,88 @@ export const config = {
   },
 };
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end('Method not allowed');
 
-const prisma = new PrismaClient();
-
-export async function POST(req: Request) {
   const form = formidable({ multiples: true });
 
-  const data = await new Promise((resolve, reject) => {
-    form.parse(req as any, (err, fields, files) => {
-      if (err) reject(err);
-      resolve({ fields, files });
-    });
-  });
+  form.parse(req, async (err, fields, files) => {
+    if (err) return res.status(500).json({ error: 'File parsing error' });
 
-  const { fields, files }: any = data;
-  const uploadPath = fields.gov_type === 'ใน กห.' ? 'military/internal' : 'military/external';
+    try {
+      const {
+        citizen_id,
+        prefix,
+        first_name,
+        last_name,
+        origin_unit,
+        doc_number,
+        doc_date,
+        gov_type,
+      } = fields;
 
-  const uploadedFiles: Record<string, string> = {};
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
 
-  for (const key in files) {
-    const file = Array.isArray(files[key]) ? files[key][0] : files[key];
-    const fileStream = fs.createReadStream(file.filepath);
-    const fileExt = file.originalFilename?.split('.').pop();
-    const filename = `${uuidv4()}.${fileExt}`;
-    const { data: uploadData, error } = await supabase.storage
-      .from('military-docs')
-      .upload(`${uploadPath}/${filename}`, fileStream, {
-        contentType: file.mimetype,
-        upsert: true,
-      });
+      const fileUpload = async (file, filenamePrefix = '') => {
+        if (!file) return null;
 
-    if (error) {
+        if (!allowedTypes.includes(file.mimetype)) {
+          throw new Error(`ไฟล์ประเภท ${file.mimetype} ไม่ได้รับอนุญาต`);
+        }
+
+        const data = await fs.readFile(file.filepath);
+
+        const folder = `docs/${citizen_id}`;
+        const fileName = `${folder}/${filenamePrefix}-${Date.now()}-${file.originalFilename}`;
+
+        const { data: uploadData, error } = await supabase.storage
+          .from('military-docs')
+          .upload(fileName, data, {
+            contentType: file.mimetype,
+            upsert: true,
+          });
+
+        if (error) throw error;
+        return uploadData.path;
+      };
+
+      const filePaths = {};
+      for (const key in files) {
+        const fileItem = files[key];
+
+        // รองรับกรณี array ของไฟล์
+        if (Array.isArray(fileItem)) {
+          const uploadedPaths = await Promise.all(
+            fileItem.map((f, i) => fileUpload(f, `${key}-${i}`))
+          );
+          filePaths[key] = uploadedPaths.join(','); // หรือเก็บเป็น array ขึ้นกับ DB schema
+        } else {
+          filePaths[key] = await fileUpload(fileItem, key);
+        }
+      }
+
+      const { error: insertError } = await supabase
+        .from('military_forms')
+        .insert([
+          {
+            citizen_id,
+            prefix,
+            first_name,
+            last_name,
+            origin_unit,
+            doc_number,
+            doc_date,
+            gov_type,
+            ...filePaths,
+          },
+        ]);
+
+      if (insertError) throw insertError;
+
+      res.status(200).json({ message: 'บันทึกสำเร็จ' });
+    } catch (error) {
       console.error('Upload error:', error);
-      return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+      res.status(500).json({ error: error.message || 'เกิดข้อผิดพลาดในการบันทึก' });
     }
-
-    uploadedFiles[key] = uploadData?.path || '';
-  }
-
-  await prisma.militaryForm.create({
-    data: {
-      citizenId: fields.citizen_id,
-      prefix: fields.prefix,
-      firstName: fields.first_name,
-      lastName: fields.last_name,
-      originUnit: fields.origin_unit,
-      docNumber: fields.doc_number,
-      docDate: new Date(fields.doc_date),
-      govType: fields.gov_type,
-      docs: uploadedFiles,
-    },
   });
-
-  return NextResponse.json({ message: 'Submitted successfully' });
 }
